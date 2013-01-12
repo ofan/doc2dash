@@ -31,9 +31,7 @@ def _link2dest(path, docpath, copy=False):
     if path[0] == '/':
         f = os.path.basename(path)
         p = os.path.join(docpath, _remove_anchor(f))
-        #print "Path: %s" % p
         if not os.path.exists(p):
-            #log.debug("Link/copy %s" % p)
             if not os.path.exists(os.path.dirname(p)):
                 os.makedirs(os.path.dirname(p))
             if copy:
@@ -88,8 +86,6 @@ class HaddockParser(_BaseParser):
                     symName = td.string.strip()
                     # Reached a new symbol name, reset type
                     symType = ''
-                #elif 'alt' in cl:
-                    #symType = _guess_type(td.string)
                 elif 'module' in cl:
                     modules = tr.find_all('a')
                     if len(modules) <= 0:
@@ -117,4 +113,18 @@ class HaddockParser(_BaseParser):
     def find_and_patch_entry(self, soup, entry):
         """ Verify whether the anchor is actually in the target file.
         """
-        return soup.find('a', attrs={'name': entry.anchor})
+        link = soup.find('a', attrs={'name': entry.anchor})
+        div = soup.find('div', id='content')
+        for a in div.find_all('a', href=True):
+            # Skip source links
+            if a.string == 'Source':
+                continue
+            a['href'] = os.path.basename(a['href'])
+
+        if link:
+            tag = soup.new_tag('a')
+            tag['name'] = self.APPLE_REF.format(entry.type, entry.name)
+            link.insert_before(tag)
+            return True
+        else:
+            return False
