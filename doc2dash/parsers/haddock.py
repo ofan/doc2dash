@@ -2,6 +2,7 @@ import logging
 import os
 import errno
 import shutil
+from urlparse import urlparse
 from bs4 import BeautifulSoup
 from . import types
 from .base import _BaseParser
@@ -18,11 +19,12 @@ def _remove_anchor(url):
     return res.strip()
 
 
-def _guess_type(tp):
-    t = tp.strip().lower()
-    if 'class' in t or 'type' in t:
+def _guess_type(url):
+    anchor = urlparse(url).fragment
+    if "t:" in anchor:
         return types.CLASS
-    return types.FUNCTION
+    elif "v:" in anchor:
+        return types.FUNCTION
 
 
 def _link2dest(path, docpath, copy=False):
@@ -31,7 +33,7 @@ def _link2dest(path, docpath, copy=False):
         p = os.path.join(docpath, _remove_anchor(f))
         #print "Path: %s" % p
         if not os.path.exists(p):
-            log.debug("Link/copy %s" % p)
+            #log.debug("Link/copy %s" % p)
             if not os.path.exists(os.path.dirname(p)):
                 os.makedirs(os.path.dirname(p))
             if copy:
@@ -84,8 +86,10 @@ class HaddockParser(_BaseParser):
                 cl = td['class']
                 if 'src' in cl:
                     symName = td.string.strip()
-                elif 'alt' in cl:
-                    symType = _guess_type(td.string)
+                    # Reached a new symbol name, reset type
+                    symType = ''
+                #elif 'alt' in cl:
+                    #symType = _guess_type(td.string)
                 elif 'module' in cl:
                     modules = tr.find_all('a')
                     if len(modules) <= 0:
@@ -101,6 +105,7 @@ class HaddockParser(_BaseParser):
                                       % (mName, types.PACKAGE, mPath))
                             yield mName, types.PACKAGE, mPath
                         if symName:
+                            symType = _guess_type(symPath)
                             if not symType:
                                 symType = 'func'
                             symPath = _link2dest(symPath, self.docpath,
