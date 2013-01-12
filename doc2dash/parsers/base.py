@@ -28,7 +28,7 @@ class _BaseParser:
 
     """Abstract parser base class."""
 
-    APPLE_REF = '//apple_ref/cpp/{}/{}'
+    APPLE_REF = u'//apple_ref/cpp/{}/{}'
 
     def __init__(self, docpath):
         self.docpath = docpath
