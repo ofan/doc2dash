@@ -1,0 +1,115 @@
+import logging
+import os
+import errno
+import shutil
+from bs4 import BeautifulSoup
+from . import types
+from .base import _BaseParser
+
+log = logging.getLogger(__name__)
+
+
+def _remove_anchor(url):
+    res = ''
+    try:
+        res = url[:url.index('#')]
+    except:
+        res = url
+    return res.strip()
+
+
+def _guess_type(tp):
+    t = tp.strip().lower()
+    if 'class' in t or 'type' in t:
+        return types.CLASS
+    return types.FUNCTION
+
+
+def _link2dest(path, docpath, copy=False):
+    if path[0] == '/':
+        f = os.path.basename(path)
+        p = os.path.join(docpath, _remove_anchor(f))
+        #print "Path: %s" % p
+        if not os.path.exists(p):
+            log.debug("Link/copy %s" % p)
+            if not os.path.exists(os.path.dirname(p)):
+                os.makedirs(os.path.dirname(p))
+            if copy:
+                try:
+                    shutil.copyfile(path, p)
+                except:
+                    log.info("Cannot copy file %s to %s"
+                             % (path, p))
+            else:
+                os.symlink(path, p)
+        return f
+    else:
+        return path
+
+
+class HaddockParser(_BaseParser):
+    """ Parser for Haskell haddock documentation. """
+    name = "haddock"
+    DETECT_FILE = "haddock-util.js"
+    DETECT_PATTERN = '''Haddock'''
+    INDEX_FILES = ['doc-index-All.html', 'doc-index.html']
+
+    def parse(self):
+        """Parse haddock docs at *docpath*.
+        yields tuples of symbol name, type and path
+        """
+        # Cache added module names to prevent duplicates
+        modCache = {}
+        for indexFile in HaddockParser.INDEX_FILES:
+            try:
+                soup = BeautifulSoup(open(os.path.join(self.docpath,
+                                     indexFile)), 'lxml')
+                break
+            except IOError:
+                pass
+        else:
+            raise IOError(errno.ENOENT, "Essential index file not found.")
+
+        log.info('Creating database...')
+
+        symName = ''
+        symType = ''
+        symPath = ''
+        for tr in soup.body.find_all('tr'):
+            for td in tr.find_all('td'):
+                if 'class' not in td.attrs:
+                    # Empty td entry, omit it
+                    continue
+
+                cl = td['class']
+                if 'src' in cl:
+                    symName = td.string.strip()
+                elif 'alt' in cl:
+                    symType = _guess_type(td.string)
+                elif 'module' in cl:
+                    modules = tr.find_all('a')
+                    if len(modules) <= 0:
+                        continue
+                    for m in modules:
+                        mName = m.string.strip()
+                        symPath = m['href'].strip()
+                        if mName not in modCache:
+                            modCache[mName] = True
+                            mPath = _link2dest(_remove_anchor(symPath),
+                                               self.docpath, copy=True)
+                            log.debug("Adding module: %s (%s) in '%s'"
+                                      % (mName, types.PACKAGE, mPath))
+                            yield mName, types.PACKAGE, mPath
+                        if symName:
+                            if not symType:
+                                symType = 'func'
+                            symPath = _link2dest(symPath, self.docpath,
+                                                 copy=True)
+                            log.debug("Adding symbol: %s (%s) in '%s'"
+                                      % (symName, symType, symPath))
+                            yield symName, symType, symPath
+
+    def find_and_patch_entry(self, soup, entry):
+        """ Verify whether the anchor is actually in the target file.
+        """
+        return soup.find('a', attrs={'name': entry.anchor})
