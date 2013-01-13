@@ -47,6 +47,15 @@ def _link2dest(path, docpath, copy=False):
         return path
 
 
+def _fix_infix(n, t):
+    init = n[0]
+    if (t == types.FUNCTION and
+            not init.isalpha() and
+            init not in '_('):
+        n = u'(%s)' % n
+    return n
+
+
 class HaddockParser(_BaseParser):
     """ Parser for Haskell haddock documentation. """
     name = "haddock"
@@ -102,8 +111,9 @@ class HaddockParser(_BaseParser):
                             yield mName, types.PACKAGE, mPath
                         if symName:
                             symType = _guess_type(symPath)
-                            if not symType:
-                                symType = 'func'
+                            # Enclose infix operators by parentheses
+                            symName = _fix_infix(symName, symType)
+                            # Copy or link target file to Documents/
                             symPath = _link2dest(symPath, self.docpath,
                                                  copy=True)
                             log.debug("Adding symbol: %s (%s) in '%s'"
