@@ -8,6 +8,7 @@ from . import types
 from .base import _BaseParser
 
 log = logging.getLogger(__name__)
+FileCache = {}
 
 
 def _remove_anchor(url):
@@ -54,6 +55,19 @@ def _fix_infix(n, t):
             init not in '_('):
         n = u'(%s)' % n
     return n
+
+
+def _fix_links(soup):
+    module = soup.find('div', id='module-header')\
+        .find('p', attrs={'class': 'caption'}).string.strip()
+    if module not in FileCache:
+        FileCache[module] = True
+        div = soup.find('div', id='content')
+        for a in div.find_all('a', href=True):
+            # Skip source links
+            if a.string == 'Source':
+                continue
+            a['href'] = os.path.basename(a['href'])
 
 
 class HaddockParser(_BaseParser):
@@ -105,7 +119,7 @@ class HaddockParser(_BaseParser):
                         if mName not in modCache:
                             modCache[mName] = True
                             mPath = _link2dest(_remove_anchor(symPath),
-                                               self.docpath, copy=True)
+                                               self.docpath, copy=False)
                             log.debug("Adding module: %s (%s) in '%s'"
                                       % (mName, types.PACKAGE, mPath))
                             yield mName, types.PACKAGE, mPath
@@ -115,7 +129,7 @@ class HaddockParser(_BaseParser):
                             symName = _fix_infix(symName, symType)
                             # Copy or link target file to Documents/
                             symPath = _link2dest(symPath, self.docpath,
-                                                 copy=True)
+                                                 copy=False)
                             log.debug("Adding symbol: %s (%s) in '%s'"
                                       % (symName, symType, symPath))
                             yield symName, symType, symPath
@@ -123,18 +137,5 @@ class HaddockParser(_BaseParser):
     def find_and_patch_entry(self, soup, entry):
         """ Verify whether the anchor is actually in the target file.
         """
-        link = soup.find('a', attrs={'name': entry.anchor})
-        div = soup.find('div', id='content')
-        for a in div.find_all('a', href=True):
-            # Skip source links
-            if a.string == 'Source':
-                continue
-            a['href'] = os.path.basename(a['href'])
-
-        if link:
-            tag = soup.new_tag('a')
-            tag['name'] = self.APPLE_REF.format(entry.type, entry.name)
-            link.insert_before(tag)
-            return True
-        else:
-            return False
+        _fix_links(soup)
+        return soup.find('a', attrs={'name': entry.anchor})
