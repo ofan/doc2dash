@@ -18,7 +18,7 @@ Currently, the following source types are supported:
 
 - Sphinx_’s HTML output (nearly every single Python project out there)
 - pydoctor_’s HTML output (Twisted_!)
-- Haddock's HTML output (all Haskell projects)
+- Haddock_’s HTML output (all Haskell projects)
 
 Feel free to help adding more! While doc2dash is implemented in Python, the
 scope for the supported documentation types is unlimited.  So go on and submit
