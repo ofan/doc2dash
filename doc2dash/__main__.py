@@ -35,6 +35,10 @@ def main():
         help='name docset explicitly',
     )
     parser.add_argument(
+        '--family', '-m',
+        help='documentation family, default is "python"',
+    )
+    parser.add_argument(
         '--version',
         action='version',
         version='%(prog)s {}'.format(__version__),
@@ -180,7 +184,7 @@ def prepare_docset(args, dest):
             'CFBundleIdentifier': args.name,
             'CFBundleName': args.name,
             'DocSetPlatformFamily': args.name.lower(),
-            'DashDocSetFamily': 'python',
+            'DashDocSetFamily': args.family.lower() or 'python',
             'isDashDocset': True,
         },
         os.path.join(dest, 'Contents/Info.plist')
