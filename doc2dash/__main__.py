@@ -36,6 +36,7 @@ def main():
     )
     parser.add_argument(
         '--family', '-m',
+        default='python',
         help='documentation family, default is "python"',
     )
     parser.add_argument(
@@ -73,6 +74,19 @@ def main():
         '--icon', '-i',
         help='add PNG icon to docset'
     )
+    parser.add_argument(
+        '--noverify', '-r',
+        action='store_true',
+        default=False,
+        help="don't verify anchors or patch docs,this can save a lot of time. \
+NOTE: verification is essential for python documentations, \
+this MUST be set for haddock documentations",
+    )
+    parser.add_argument(
+        '--index', '-x',
+        default='index.html',
+        help="the index file of the docset",
+    )
     args = parser.parse_args()
 
     if args.icon and not args.icon.endswith('.png'):
@@ -100,25 +114,28 @@ def main():
 
     with db_conn:
         log.info('Parsing HTML...')
-        toc = doc_parser.add_toc()
+        if not args.noverify:
+            toc = doc_parser.add_toc()
         for entry in doc_parser.parse():
             db_conn.execute(
                 'INSERT INTO searchIndex VALUES (NULL, ?, ?, ?)',
                 entry
             )
-            toc.send(entry)
+            if not args.noverify:
+                toc.send(entry)
         log.info('Added {0:,} index entries.'.format(
             db_conn.execute('SELECT COUNT(1) FROM searchIndex')
                    .fetchone()[0]))
         log.info('Adding table of contents meta data...')
-        toc.close()
+        if not args.noverify:
+            toc.close()
 
     if args.icon:
         add_icon(args.icon, dest)
 
     if args.add_to_dash:
         log.info('Adding to dash...')
-        os.system('open -a dash "{}"'.format(dest))
+        os.system("open -a dash '{}'".format(dest))
 
 
 def determine_log_level(args):
@@ -184,7 +201,8 @@ def prepare_docset(args, dest):
             'CFBundleIdentifier': args.name,
             'CFBundleName': args.name,
             'DocSetPlatformFamily': args.name.lower(),
-            'DashDocSetFamily': args.family.lower() or 'python',
+            'DashDocSetFamily': args.family.lower(),
+            'dashIndexFilePath': args.index,
             'isDashDocset': True,
         },
         os.path.join(dest, 'Contents/Info.plist')
