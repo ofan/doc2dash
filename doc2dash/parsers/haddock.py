@@ -6,6 +6,7 @@ from urlparse import urlparse
 from bs4 import BeautifulSoup
 from . import types
 from .base import _BaseParser
+import re
 
 log = logging.getLogger(__name__)
 FileCache = {}
@@ -28,13 +29,46 @@ def _guess_type(url):
         return types.FUNCTION
 
 
+def _ignore_files(f):
+    return (".html" not in f) and ("/" not in f)
+
+
 def _link2dest(path, docpath, copy=False):
     if path[0] == '/':
-        f = os.path.basename(path)
+        if r"doc/html" in path:
+            # path uses absolute path
+            try:
+                log.debug("path: " + _remove_anchor(path))
+                moduleName = re.match(r'.*/((\w|\.|-|\d)+\d)/.*',
+                                      _remove_anchor(path)).group(1)
+                log.debug("moduleName: " + moduleName)
+                f = os.path.join(moduleName, os.path.basename(path))
+            except:
+                f = os.path.basename(path)
+        else:
+            # path uses relative path
+            moduleName = os.path.basename(os.path.dirname(path))
+            f = os.path.join(moduleName, os.path.basename(path))
         p = os.path.join(docpath, _remove_anchor(f))
+
+        if not os.path.exists(os.path.dirname(p)):
+            os.makedirs(os.path.dirname(p))
+            auxFiles = filter(_ignore_files, os.listdir(docpath))
+            log.debug("auxFiles: " + str(auxFiles) + "\nmodule: " + moduleName)
+            # link essential haddock template files(e.g. css,js etc)
+            for af in auxFiles:
+                if not os.path.isdir(os.path.join(docpath, af)):
+                    log.debug("ln " + os.path.abspath(os.path.join(docpath, af))
+                              + "\nto " + os.path.join(os.path.dirname(p), af))
+                    os.symlink(os.path.abspath(os.path.join(docpath, af)),
+                               os.path.join(os.path.dirname(p), af))
+            # Link src dir if exists
+            srcDir = os.path.join(os.path.dirname(path), 'src')
+            dstSrcDir = os.path.join(os.path.dirname(p), 'src')
+            if os.path.exists(srcDir):
+                os.symlink(srcDir, dstSrcDir)
+
         if not os.path.exists(p):
-            if not os.path.exists(os.path.dirname(p)):
-                os.makedirs(os.path.dirname(p))
             if copy:
                 try:
                     shutil.copyfile(path, p)
