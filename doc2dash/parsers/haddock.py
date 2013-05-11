@@ -34,12 +34,13 @@ def _ignore_files(f):
 
 
 def _link2dest(path, docpath, copy=False):
+    moduleMatch = r'.*/((\w|\.|-|\d)+\d)/.*'
     if path[0] == '/':
         if r"doc/html" in path:
             # path uses absolute path
             try:
                 log.debug("path: " + _remove_anchor(path))
-                moduleName = re.match(r'.*/((\w|\.|-|\d)+\d)/.*',
+                moduleName = re.match(moduleMatch,
                                       _remove_anchor(path)).group(1)
                 log.debug("moduleName: " + moduleName)
                 f = os.path.join(moduleName, os.path.basename(path))
@@ -50,6 +51,7 @@ def _link2dest(path, docpath, copy=False):
             moduleName = os.path.basename(os.path.dirname(path))
             f = os.path.join(moduleName, os.path.basename(path))
         p = os.path.join(docpath, _remove_anchor(f))
+        log.debug("p: " + p)
 
         if not os.path.exists(os.path.dirname(p)):
             os.makedirs(os.path.dirname(p))
@@ -58,7 +60,8 @@ def _link2dest(path, docpath, copy=False):
             # link essential haddock template files(e.g. css,js etc)
             for af in auxFiles:
                 if not os.path.isdir(os.path.join(docpath, af)):
-                    log.debug("ln " + os.path.abspath(os.path.join(docpath, af))
+                    log.debug("ln "
+                              + os.path.abspath(os.path.join(docpath, af))
                               + "\nto " + os.path.join(os.path.dirname(p), af))
                     os.symlink(os.path.abspath(os.path.join(docpath, af)),
                                os.path.join(os.path.dirname(p), af))
@@ -76,7 +79,14 @@ def _link2dest(path, docpath, copy=False):
                     log.info("Cannot copy file %s to %s"
                              % (path, p))
             else:
-                os.symlink(path, p)
+                if os.path.lexists(p):
+                    log.debug("Broken symlink '%s'" % p)
+                    log.debug("Remove it")
+                    try:
+                        os.remove(p)
+                    except:
+                        log.debug("Failed to remove.")
+                os.symlink(_remove_anchor(path), p)
         return f
     else:
         return path
@@ -120,7 +130,8 @@ class HaddockParser(_BaseParser):
         for indexFile in HaddockParser.INDEX_FILES:
             try:
                 soup = BeautifulSoup(open(os.path.join(self.docpath,
-                                     indexFile)), 'lxml')
+                                     indexFile)), 'xml')
+                log.debug("Detected " + indexFile)
                 break
             except IOError:
                 pass
@@ -132,7 +143,9 @@ class HaddockParser(_BaseParser):
         symName = ''
         symType = ''
         symPath = ''
-        for tr in soup.body.find_all('tr'):
+        trs = soup.body.find_all('tr')
+        log.debug("Found %d <tr>" % len(trs))
+        for tr in trs:
             for td in tr.find_all('td'):
                 if 'class' not in td.attrs:
                     # Empty td entry, omit it
