@@ -2,7 +2,7 @@ import logging
 import os
 import errno
 import shutil
-from urlparse import urlparse
+from urlparse import urlparse, urlunparse
 from bs4 import BeautifulSoup
 from . import types
 from .base import _BaseParser
@@ -32,14 +32,15 @@ def _guess_type(url):
 def _ignore_files(f):
     return (".html" not in f) and ("/" not in f)
 
-
 def _link2dest(path, docpath, copy=False):
     moduleMatch = r'.*/((\w|\.|-|\d)+\d)/.*'
-    if path[0] == '/':
+    log.debug("docpath: %s" % docpath)
+    log.debug("path: %s" % path)
+    if path.startswith('file:///'):
+        path = path.replace('file://','')
         if r"doc/html" in path:
             # path uses absolute path
             try:
-                log.debug("path: " + _remove_anchor(path))
                 moduleName = re.match(moduleMatch,
                                       _remove_anchor(path)).group(1)
                 log.debug("moduleName: " + moduleName)
@@ -50,6 +51,7 @@ def _link2dest(path, docpath, copy=False):
             # path uses relative path
             moduleName = os.path.basename(os.path.dirname(path))
             f = os.path.join(moduleName, os.path.basename(path))
+
         p = os.path.join(docpath, _remove_anchor(f))
         log.debug("p: " + p)
 
@@ -76,7 +78,7 @@ def _link2dest(path, docpath, copy=False):
                 try:
                     shutil.copyfile(path, p)
                 except:
-                    log.info("Cannot copy file %s to %s"
+                    log.debug("Cannot copy file %s to %s"
                              % (path, p))
             else:
                 if os.path.lexists(p):
@@ -161,8 +163,10 @@ class HaddockParser(_BaseParser):
                     if len(modules) <= 0:
                         continue
                     for m in modules:
+                        log.debug('----------')
                         mName = m.string.strip()
                         symPath = m['href'].strip()
+                        log.debug('symPath: %s' % symPath)
                         if mName not in modCache:
                             modCache[mName] = True
                             mPath = _link2dest(_remove_anchor(symPath),
